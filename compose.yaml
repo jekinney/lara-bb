@@ -3,13 +3,16 @@
 #   docker compose up -d                                  app only, bring your own DB and Redis
 #   docker compose --profile local-db --profile local-redis up -d   everything in containers
 #
-# Every service is configured through .env, so a local container and a managed service
+# The installer writes its settings to storage/app/.env on the storage volume, so a fresh stack needs no .env.
+# Every service is configured through environment variables, so a local container and a managed service
 # differ only in the values of DB_HOST, REDIS_HOST, and so on.
 
 x-app: &app
   image: ${LARABB_IMAGE:-larabb:latest}
   build: .
-  env_file: .env
+  env_file:
+    - path: .env
+      required: false
   restart: unless-stopped
   volumes:
     - storage:/app/storage

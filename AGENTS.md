@@ -26,9 +26,10 @@ A phpBB3-style forum built on Laravel 13 (PHP 8.3+). Read this before changing c
 - **Themes**: uploadable packages of tokens, CSS and assets only, never executable code. Every theme has a light and a dark mode. Site default is set by the admin, and members may pick a theme and mode if the admin allows it.
 - **Editors**: BBCode and Markdown behind an `EditorDriver` contract. Each post stores its source, its `format`, and a cached sanitized HTML render.
 - **Services**: everything is configured by environment variables so DB, Redis, file storage and mail can each be a local container or a managed service.
-- **Installer**: a web wizard guarded by a one-time setup token, locked and removed after use.
+- **Installer**: `app/Install`, `InstallController` and `resources/views/install`. A wizard guarded by a one-time setup token. The `InstallGate` middleware runs first: before install it forces file sessions and cache, after install it answers 404 for anything under `/install`. `storage/app/installed` is the lock. The install runs under a file lock and rolls back on failure. Write installer settings only through `EnvWriter`, and never echo secrets back into HTML.
+- **Tests never touch real paths.** Feature tests get a throwaway sandbox directory for every installer file (see `tests/Pest.php`). Do not delete or write outside `$this->sandbox`.
 - **Health**: `/healthz` is liveness, `/readyz` checks the dependencies in `config/health.php` and returns 503 with no error details when one fails.
 
 ## Docker
 
-One image, four roles chosen by `CONTAINER_ROLE`: `web`, `worker`, `scheduler`, `migrate`. See `compose.yaml` and `docker/entrypoint.sh`. The image runs as a non-root user.
+One image, four roles chosen by `CONTAINER_ROLE`: `web`, `worker`, `scheduler`, `migrate`. See `compose.yaml` and `docker/entrypoint.sh`. The image runs as a non-root user. `scripts/smoke-install.sh` runs the real installer against a container and is part of CI.

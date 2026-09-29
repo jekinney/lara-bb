@@ -43,7 +43,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: pdo_sqlite, mbstring, intl, gd
+          extensions: pdo_sqlite, pdo_mysql, mbstring, intl, gd
           coverage: xdebug
       - run: composer install --no-interaction --prefer-dist
       - run: cp .env.example .env && php artisan key:generate
@@ -65,18 +65,22 @@ jobs:
           tags: larabb:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Web role answers /healthz
+      - name: Fresh container answers /healthz before it is installed
         run: |
-          docker run -d --name larabb -p 8080:80 \
-            -e APP_KEY=base64:$(openssl rand -base64 32) \
-            -e DB_CONNECTION=sqlite -e DB_DATABASE=/tmp/ci.sqlite \
-            -e CACHE_STORE=array -e SESSION_DRIVER=array larabb:ci
+          docker run -d --name larabb -p 8080:80 -v larabb-storage:/app/storage \
+            -e LARABB_INSTALLER_ALLOW_HTTP=true larabb:ci
           for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:8080/healthz && exit 0
             sleep 2
           done
           docker logs larabb
           exit 1
+      - name: Web installer installs the board and locks itself
+        run: scripts/smoke-install.sh larabb http://127.0.0.1:8080
+      - name: Migrate role skips before install and runs after
+        run: |
+          docker run --rm -e CONTAINER_ROLE=migrate larabb:ci | grep -q "nothing to migrate"
+          docker run --rm -e CONTAINER_ROLE=migrate -v larabb-storage:/app/storage larabb:ci | grep -q "Nothing to migrate"
       - name: Unknown role is rejected
         run: |
           set +e

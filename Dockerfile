@@ -27,7 +27,8 @@ ENV APP_ENV=production \
     APP_DEBUG=false \
     LOG_CHANNEL=stderr \
     SERVER_NAME=":80" \
-    CONTAINER_ROLE=web
+    CONTAINER_ROLE=web \
+    LARABB_ENV_FILE=/app/storage/app/.env
 
 WORKDIR /app
 COPY --from=vendor /app /app
@@ -37,7 +38,7 @@ COPY docker/entrypoint.sh /usr/local/bin/larabb-entrypoint
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-larabb.ini
 
 RUN chmod +x /usr/local/bin/larabb-entrypoint \
-    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && mkdir -p storage/app storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && php artisan package:discover --ansi \
     && chown -R www-data:www-data storage bootstrap/cache
 

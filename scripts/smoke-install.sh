@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Runs the web installer against a fresh laraBB container and checks that it locks itself.
+#
+#   scripts/smoke-install.sh <container-name> <base-url>
+#
+# The container must have LARABB_INSTALLER_ALLOW_HTTP=true when the URL is plain HTTP.
+set -euo pipefail
+
+# Git Bash on Windows rewrites "database=/app/..." into a Windows path. Harmless elsewhere.
+export MSYS2_ARG_CONV_EXCL="database="
+
+container="${1:?container name}"
+base="${2:?base url, for example http://127.0.0.1:8080}"
+jar="$(mktemp)"
+trap 'rm -f "$jar"' EXIT
+
+csrf() {
+  local html; html="$(curl -fsS -b "$jar" -c "$jar" "$base$1")"
+  [[ $html =~ name=\"_token\"\ value=\"([^\"]+)\" ]] || { echo "no CSRF token on $1" >&2; return 1; }
+  printf '%s' "${BASH_REMATCH[1]}"
+}
+status() { curl -s -o /dev/null -w '%{http_code}' -b "$jar" -c "$jar" "$@"; }
+post() { # post <path> <expected-status> [curl --data-urlencode args...]
+  local path="$1" expected="$2"; shift 2
+  local out code where
+  out="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -b "$jar" -c "$jar" -X POST "$base$path" --data-urlencode "_token=$(csrf "${CSRF_PAGE:-$path}")" "$@")"
+  code="${out%% *}"; where="${out#* }"
+  [ "$code" = "$expected" ] || { echo "POST $path returned $code, expected $expected" >&2; exit 1; }
+  echo "ok  POST $path -> $code $where"
+}
+
+[ "$(status "$base/")" = "302" ] || { echo "/ should redirect to the installer" >&2; exit 1; }
+
+csrf /install/token >/dev/null   # opening the token page is what issues the token
+token="$(docker exec "$container" cat storage/app/install-token | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
+[ -n "$token" ] || { echo "no setup token was issued" >&2; exit 1; }
+
+post /install/token 302 --data-urlencode "token=AAAA-AAAA-AAAA"   # wrong token is refused, wizard stays on the token step
+[ "$(status "$base/install/requirements")" = "302" ] || { echo "wizard must not skip the token step" >&2; exit 1; }
+post /install/token 302 --data-urlencode "token=$token"
+post /install/requirements 302
+post /install/database 302 -d driver=sqlite -d database=/app/storage/app/board.sqlite -d action=continue
+post /install/services 302 -d cache_driver=database -d mail_mailer=log -d mail_from=noreply@example.com -d storage=local -d action=continue
+post /install/site 302 -d board_name=laraBB -d "board_url=$base" -d timezone=UTC -d theme=default -d editor=markdown \
+  -d founder_username=mira -d founder_email=mira@example.com \
+  --data-urlencode "founder_password=a-long-passphrase-42" --data-urlencode "founder_password_confirmation=a-long-passphrase-42"
+
+curl -fsS -b "$jar" -c "$jar" "$base/install/review" | grep -q "Ready to install"
+CSRF_PAGE=/install/review post /install/run 200
+
+for path in /install /install/token /install/run; do
+  code="$(status "$base$path")"
+  [ "$code" = "404" ] || { echo "$path should be 404 after installing, got $code" >&2; exit 1; }
+done
+[ "$(status "$base/")" = "200" ] || { echo "the board should serve after installing" >&2; exit 1; }
+curl -fsS "$base/readyz" | grep -q '"status":"ok"'
+docker exec "$container" test -f storage/app/installed
+! docker exec "$container" grep -q "a-long-passphrase-42" storage/app/.env
+
+echo "Installer smoke test passed."

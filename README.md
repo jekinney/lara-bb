@@ -2,7 +2,7 @@
 
 A phpBB3-style forum for Laravel: full permission system, swappable themes, mobile-first design, and a Docker-first deployment.
 
-> Status: early development. Phase 0 (scaffold, health checks, Docker, CI) is in place. Forum features are not built yet.
+> Status: early development. The scaffold, health checks, Docker image, CI and the web installer are in place. Forum features are not built yet.
 
 ## Goals
 
@@ -12,6 +12,25 @@ A phpBB3-style forum for Laravel: full permission system, swappable themes, mobi
 - **Two editors.** BBCode and Markdown, switchable per site, per member and per post.
 - **Runs anywhere.** One Docker image, with a local or managed database, Redis, file storage and mail.
 - **Secure installer.** Upload, open the site, follow the wizard. It locks itself when done.
+
+## Install
+
+Deploy the code or the Docker image, then open the site in a browser. Every page sends you to the installer until laraBB is installed.
+
+1. **Setup token.** Proves you control the server. It is written to the application log (`docker compose logs web`) and to `storage/app/install-token`, and expires after 30 minutes. Wrong guesses are rate limited.
+2. **Server check.** PHP version, extensions, writable paths, HTTPS.
+3. **Database.** MySQL, MariaDB, or SQLite for development. Must be empty. There is a test button, and TLS with a CA certificate is supported for managed databases.
+4. **Services.** Redis or the database for cache, sessions and queue. SMTP or log for mail. Local disk or S3-compatible storage such as DigitalOcean Spaces. Each has a test button.
+5. **Board and founder account.**
+6. **Review and install.** Creates the tables, the founder account and the settings, writes the configuration, and locks the installer. If anything fails it rolls back and leaves the database empty.
+
+Afterwards `/install` returns 404. In production the installer views are also deleted. The lock is the file `storage/app/installed`.
+
+Plain HTTP is refused in production. Behind a load balancer that ends TLS, set `LARABB_INSTALLER_ALLOW_HTTP=true`.
+
+In Docker the finished configuration is saved to `storage/app/.env` on the storage volume (`LARABB_ENV_FILE`), so it survives the container being replaced. The worker and scheduler containers wait until the install has finished.
+
+To install again, empty the database and delete `storage/app/installed` and `storage/app/.env`.
 
 ## Develop
 
