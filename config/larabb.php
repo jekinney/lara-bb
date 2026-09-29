@@ -27,6 +27,9 @@ return [
         // Plain HTTP is refused in production unless a load balancer terminates TLS and this is set.
         'allow_http' => (bool) env('LARABB_INSTALLER_ALLOW_HTTP', false),
 
+        // Lets `php artisan larabb:uninstall` run outside APP_ENV=local. Local development only.
+        'allow_uninstall' => (bool) env('LARABB_ALLOW_UNINSTALL', false),
+
         // Delete the installer views once the install has finished. Off outside production so a
         // development checkout keeps its tracked files.
         'remove_files' => (bool) env('LARABB_INSTALLER_REMOVE', env('APP_ENV') === 'production'),

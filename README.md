@@ -30,7 +30,18 @@ Plain HTTP is refused in production. Behind a load balancer that ends TLS, set `
 
 In Docker the finished configuration is saved to `storage/app/.env` on the storage volume (`LARABB_ENV_FILE`), so it survives the container being replaced. The worker and scheduler containers wait until the install has finished.
 
-To install again, empty the database and delete `storage/app/installed` and `storage/app/.env`.
+### Trying the installer again (local development only)
+
+```sh
+php artisan larabb:uninstall            # asks first; add --force to skip the question
+docker exec larabb-dev php artisan larabb:uninstall --force
+```
+
+This drops every table in the configured database and removes the install lock, the setup token and the other installer files, so `/install` works again. It keeps your env file unless you add `--delete-env`, and `--skip-database` leaves the database alone. `--database=name` picks another connection.
+
+It refuses to run unless `APP_ENV=local` or `LARABB_ALLOW_UNINSTALL=true`, so a production board cannot be wiped by accident. There is no web version of it. In a production build the installer views are deleted after installing, so run a development container with `-e APP_ENV=local` if you want to reinstall.
+
+To skip the wizard while developing, `scripts/dev-install.sh <container> <url> <username> <email> <password>` installs a container using SQLite, log mail and local storage.
 
 ## Develop
 
