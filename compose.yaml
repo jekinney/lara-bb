@@ -1,0 +1,91 @@
+# laraBB production-style stack, sized for a single DigitalOcean droplet.
+#
+#   docker compose up -d                                  app only, bring your own DB and Redis
+#   docker compose --profile local-db --profile local-redis up -d   everything in containers
+#
+# Every service is configured through .env, so a local container and a managed service
+# differ only in the values of DB_HOST, REDIS_HOST, and so on.
+
+x-app: &app
+  image: ${LARABB_IMAGE:-larabb:latest}
+  build: .
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - storage:/app/storage
+
+services:
+  web:
+    <<: *app
+    environment:
+      CONTAINER_ROLE: web
+      SERVER_NAME: ${SERVER_NAME:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - storage:/app/storage
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    environment:
+      CONTAINER_ROLE: worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: *app
+    environment:
+      CONTAINER_ROLE: scheduler
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    <<: *app
+    restart: "no"
+    environment:
+      CONTAINER_ROLE: migrate
+
+  db:
+    profiles: [local-db]
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:-larabb}
+      MARIADB_USER: ${DB_USERNAME:-larabb}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    profiles: [local-redis]
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  storage:
+  caddy_data:
+  caddy_config:
+  db_data:
+  redis_data:

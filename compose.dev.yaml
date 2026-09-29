@@ -1,0 +1,17 @@
+# Local development overrides:
+#   docker compose -f compose.yaml -f compose.dev.yaml --profile local-db --profile local-redis up
+services:
+  web:
+    ports: !override
+      - "8080:80"
+    environment:
+      CONTAINER_ROLE: web
+      SERVER_NAME: ":80"
+      APP_ENV: local
+      APP_DEBUG: "true"
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"

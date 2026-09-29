@@ -1,0 +1,11 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 8
+    # Pest closures bind $this at runtime, which PHPStan cannot follow, so tests are not analysed.
+    # config/ is mostly framework stubs that trip on env() types.
+    paths:
+        - app
+        - routes
+        - bootstrap
