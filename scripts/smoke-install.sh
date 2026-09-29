@@ -57,4 +57,17 @@ curl -fsS "$base/readyz" | grep -q '"status":"ok"'
 docker exec "$container" test -f storage/app/installed
 ! docker exec "$container" grep -q "a-long-passphrase-42" storage/app/.env
 
+# The installed board takes registrations and logins, and the founder can log in.
+post /register 302 -d name=visitor1 -d email=visitor1@example.com -d timezone=UTC -d website_url= \
+  --data-urlencode "password=another-long-passphrase" --data-urlencode "password_confirmation=another-long-passphrase"
+[ "$(status "$base/members/visitor1")" = "200" ] || { echo "the new member's profile should exist" >&2; exit 1; }
+[ "$(status "$base/account")" = "200" ] || { echo "a registered member should be logged in" >&2; exit 1; }
+CSRF_PAGE=/account post /logout 302
+[ "$(status "$base/account")" = "302" ] || { echo "logging out should end the session" >&2; exit 1; }
+post /login 302 -d login=VISITOR1 --data-urlencode "password=another-long-passphrase"
+[ "$(status "$base/account")" = "200" ] || { echo "the member should be back in after logging in" >&2; exit 1; }
+CSRF_PAGE=/account post /logout 302
+post /login 302 -d login=mira --data-urlencode "password=a-long-passphrase-42"
+[ "$(status "$base/account")" = "200" ] || { echo "the founder should be able to log in" >&2; exit 1; }
+
 echo "Installer smoke test passed."

@@ -2,7 +2,7 @@
 
 A phpBB3-style forum for Laravel: full permission system, swappable themes, mobile-first design, and a Docker-first deployment.
 
-> Status: early development. The scaffold, health checks, Docker image, CI and the web installer are in place. Forum features are not built yet.
+> Status: early development. The scaffold, Docker image, CI, web installer and accounts (registration, login, groups, profiles) are in place. The permission system and the forums themselves are not built yet.
 
 ## Goals
 

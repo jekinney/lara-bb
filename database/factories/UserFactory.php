@@ -18,14 +18,14 @@ class UserFactory extends Factory
     protected static ?string $password;
 
     /**
-     * Define the model's default state.
+     * Define the model's default state. Every user's password is "password" unless overridden.
      *
      * @return array<string, mixed>
      */
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
+            'name' => fake()->unique()->userName(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
@@ -41,5 +41,11 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    /** Registered, but has not confirmed the email address yet, so cannot log in. */
+    public function awaitingEmail(): static
+    {
+        return $this->unverified()->state(fn (array $attributes) => ['status' => User::STATUS_AWAITING_EMAIL]);
     }
 }

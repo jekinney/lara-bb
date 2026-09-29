@@ -52,7 +52,13 @@ it('installs the board end to end', function () {
             'board.default_theme' => '"default"',
             'board.name' => '"Test Board"',
             'board.timezone' => '"Europe\/Berlin"',
+            'registration.mode' => '"open"',
         ])
+        ->and($founder)->toMatchArray(['status' => 'active', 'timezone' => 'Europe/Berlin'])
+        ->and(boardDb()->query('select g.slug from groups g join group_user gu on gu.group_id = g.id order by g.slug')->fetchAll(PDO::FETCH_COLUMN))
+        ->toBe(['administrators', 'registered'])
+        ->and((int) $founder['primary_group_id'])->toBe((int) boardDb()->query("select id from groups where slug = 'administrators'")->fetchColumn())
+        ->and($founder['username_clean'])->toBe('mira')
         ->and(sandboxPath('installed'))->toBeFile()
         ->and(sandboxPath('install-token'))->not->toBeFile();
 
@@ -95,6 +101,14 @@ it('writes Redis, SMTP, S3 and TLS settings to the env file', function () {
     ]);
 
     expect(sandboxPath('db-ca.pem'))->toBeFile();
+});
+
+it('asks new members to confirm their email when the board can send email', function () {
+    $this->withSession(['install' => wizardData(['services' => [
+        'mail_mailer' => 'smtp', 'mail_host' => 'smtp.example.com', 'mail_port' => 587,
+    ]])])->post('/install/run')->assertOk();
+
+    expect(boardDb()->query("select value from settings where key = 'registration.mode'")->fetchColumn())->toBe('"email"');
 });
 
 it('writes MySQL connection details for a real server', function () {

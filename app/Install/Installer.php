@@ -2,6 +2,8 @@
 
 namespace App\Install;
 
+use App\Auth\RegistrationMode;
+use App\Models\Group;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
@@ -104,12 +106,15 @@ final class Installer
      */
     private function populate(array $wizard): array
     {
-        $site = $wizard['site'];
+        ['site' => $site, 'services' => $services] = $wizard;
 
         if (Artisan::call('migrate', ['--database' => self::CONNECTION, '--force' => true]) !== 0) {
             throw new RuntimeException(trim(Artisan::output()));
         }
         $tasks = ['Created the database tables'];
+
+        // The founder is an administrator and a registered user, like any admin created later.
+        $groups = Group::on(self::CONNECTION)->whereIn('slug', ['administrators', 'registered'])->pluck('id', 'slug');
 
         $founder = new User;
         $founder->setConnection(self::CONNECTION);
@@ -119,7 +124,11 @@ final class Installer
             'password' => $site['founder_password'],
             'email_verified_at' => now(),
             'is_founder' => true,
+            'status' => User::STATUS_ACTIVE,
+            'timezone' => $site['timezone'],
+            'primary_group_id' => $groups['administrators'],
         ])->save();
+        $founder->groups()->attach($groups->values()->all());
         $tasks[] = 'Created the founder account';
 
         foreach ([
@@ -127,6 +136,8 @@ final class Installer
             'board.timezone' => $site['timezone'],
             'board.default_theme' => $site['theme'],
             'board.default_editor' => $site['editor'],
+            // New members must confirm their email when the board can actually send email.
+            'registration.mode' => $services['mail_mailer'] === 'smtp' ? RegistrationMode::Email->value : RegistrationMode::Open->value,
         ] as $key => $value) {
             Setting::on(self::CONNECTION)->updateOrCreate(['key' => $key], ['value' => $value]);
         }
